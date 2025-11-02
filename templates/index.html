@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>MechaMind - PulleyGen OCC</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:#eee; text-align:center; padding:40px; }
+    textarea { width:80%; height:100px; border-radius:10px; padding:10px; font-size:16px; }
+    button { background:#ffcc00; color:#000; font-weight:bold; border:none; padding:10px 20px; margin:10px; border-radius:10px; cursor:pointer; }
+    button:hover { background:#ffd700; }
+  </style>
+</head>
+<body>
+  <h1>⚙️ MechaMind PulleyGen</h1>
+  <p>Décris ta poulie :</p>
+  <textarea id="prompt" placeholder="Ex : Crée-moi une poulie en chape capable de soulever 500 kg, câble 10 mm, diamètre 120 mm"></textarea>
+  <br>
+  <button onclick="analyseIA()">Analyse IA</button>
+  <button onclick="genSTEP()">Générer 3D (STEP)</button>
+  <button onclick="genSTL()">Aperçu (STL)</button>
+  <pre id="result"></pre>
+
+  <script>
+    async function analyseIA(){
+      const prompt = document.getElementById("prompt").value;
+      const res = await fetch("/ia", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({text:prompt})
+      });
+      const data = await res.json();
+      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+      return data;
+    }
+
+    async function genSTEP(){
+      const prompt = document.getElementById("prompt").value;
+      const ia = await fetch("/ia", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({text:prompt})
+      }).then(r=>r.json());
+      const spec = {
+        type: ia.type || "chape",
+        load_mass_kg: ia.load_mass_kg || 500,
+        duty_hours: ia.duty_hours || 3,
+        material: ia.material || "S355",
+        diameter_mm: ia.diameter_mm || 120,
+        rope_diameter_mm: ia.rope_diameter_mm || 10
+      };
+      const res = await fetch("/cad/pulley", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(spec)
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "pulley.step"; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function genSTL(){
+      const prompt = document.getElementById("prompt").value;
+      const ia = await fetch("/ia", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({text:prompt})
+      }).then(r=>r.json());
+      const spec = {
+        type: ia.type || "chape",
+        load_mass_kg: ia.load_mass_kg || 500,
+        duty_hours: ia.duty_hours || 3,
+        material: ia.material || "S355",
+        diameter_mm: ia.diameter_mm || 120,
+        rope_diameter_mm: ia.rope_diameter_mm || 10
+      };
+      const res = await fetch("/cad/pulley/stl", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(spec)
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "pulley.stl"; a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

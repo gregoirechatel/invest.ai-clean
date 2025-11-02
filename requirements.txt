@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+jinja2
+requests
+cadquery
+numpy
+trimesh
+python-dotenv
