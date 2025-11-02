@@ -4,65 +4,62 @@ from backend.cad_pulley import build_pulley, export_step_bytes, export_stl_bytes
 import requests
 import os
 
+app = FastAPI()
+
 # ==========================================================
 # ⚙️ Configuration
 # ==========================================================
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # récupère la clé depuis les variables d’environnement Render/GitHub
 MODEL = "anthropic/claude-3-haiku"
-
-app = FastAPI()
+OPENROUTER_URL = "https://api.openrouter.ai/v1/chat/completions"
 
 # ==========================================================
 # 1️⃣ Page d'accueil
 # ==========================================================
 @app.get("/")
 def home():
-    """Affiche la page d'accueil HTML"""
+    """Affiche la page d'accueil"""
     return Response(
         content=open("templates/index.html", encoding="utf-8").read(),
         media_type="text/html",
     )
 
 # ==========================================================
-# 2️⃣ Appel IA : interprétation du texte en JSON mécanique
+# 2️⃣ Appel IA
 # ==========================================================
 @app.post("/ia")
 def analyse_ia(payload: dict):
     """Appelle OpenRouter avec la clé API stockée dans les variables d'environnement"""
     prompt = payload.get("text", "")
     if not OPENROUTER_API_KEY:
-        return {"error": "Clé API manquante. Définis OPENROUTER_API_KEY dans tes variables d'environnement."}
+        return {"error": "Clé API manquante. Définis OPENROUTER_API_KEY dans les variables d’environnement Render/GitHub."}
 
-    url = "https://api.openrouter.ai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
     }
+
     body = {
         "model": MODEL,
         "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Tu es un ingénieur mécanique. "
-                    "Analyse la demande et rends un JSON clair des caractéristiques d'une poulie demandée."
-                ),
-            },
+            {"role": "system", "content": "Tu es un ingénieur mécanique. Rends un JSON clair avec les caractéristiques de la poulie demandée."},
             {"role": "user", "content": prompt},
         ],
         "response_format": {"type": "json_object"},
     }
 
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=30)
+        r = requests.post(OPENROUTER_URL, headers=headers, json=body, timeout=40)
         r.raise_for_status()
         data = r.json()
         return data.get("choices", [{}])[0].get("message", {}).get("content", {})
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Erreur de connexion à OpenRouter : {str(e)}"}
     except Exception as e:
         return {"error": str(e)}
 
 # ==========================================================
-# 3️⃣ Génération de la poulie 3D au format STEP
+# 3️⃣ Génération de la poulie (STEP)
 # ==========================================================
 @app.post("/cad/pulley")
 def cad_build_pulley(spec: PulleySpec):
@@ -83,7 +80,7 @@ def cad_build_pulley(spec: PulleySpec):
         return {"error": str(e)}
 
 # ==========================================================
-# 4️⃣ Génération de la poulie 3D au format STL
+# 4️⃣ Génération de la poulie (STL)
 # ==========================================================
 @app.post("/cad/pulley/stl")
 def cad_build_pulley_stl(spec: PulleySpec):
