@@ -4,10 +4,16 @@ from backend.cad_pulley import build_pulley, export_step_bytes, export_stl_bytes
 import requests
 import os
 
+# ==========================================================
+# ⚙️ Configuration
+# ==========================================================
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+MODEL = "anthropic/claude-3-haiku"
+
 app = FastAPI()
 
 # ==========================================================
-# 1️⃣ Accueil
+# 1️⃣ Page d'accueil
 # ==========================================================
 @app.get("/")
 def home():
@@ -18,29 +24,29 @@ def home():
     )
 
 # ==========================================================
-# 2️⃣ Appel IA
+# 2️⃣ Appel IA : interprétation du texte en JSON mécanique
 # ==========================================================
 @app.post("/ia")
 def analyse_ia(payload: dict):
-    """Appelle l'API OpenRouter avec la clé définie dans les variables d'environnement GitHub/Render"""
+    """Appelle OpenRouter avec la clé API stockée dans les variables d'environnement"""
     prompt = payload.get("text", "")
-    api_key = os.getenv("OPENROUTER_API_KEY")  # 🔑 clé chargée automatiquement par GitHub/Render
+    if not OPENROUTER_API_KEY:
+        return {"error": "Clé API manquante. Définis OPENROUTER_API_KEY dans tes variables d'environnement."}
+
     url = "https://api.openrouter.ai/v1/chat/completions"
-
-    if not api_key:
-        return {"error": "Clé API OpenRouter manquante (variable d'environnement OPENROUTER_API_KEY non trouvée)"}
-
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
     }
-
     body = {
-        "model": "anthropic/claude-3-haiku",
+        "model": MODEL,
         "messages": [
             {
                 "role": "system",
-                "content": "Tu es un ingénieur mécanique. Rends un JSON clair des caractéristiques d'une poulie demandée.",
+                "content": (
+                    "Tu es un ingénieur mécanique. "
+                    "Analyse la demande et rends un JSON clair des caractéristiques d'une poulie demandée."
+                ),
             },
             {"role": "user", "content": prompt},
         ],
@@ -56,37 +62,43 @@ def analyse_ia(payload: dict):
         return {"error": str(e)}
 
 # ==========================================================
-# 3️⃣ Génération de la poulie STEP
+# 3️⃣ Génération de la poulie 3D au format STEP
 # ==========================================================
 @app.post("/cad/pulley")
 def cad_build_pulley(spec: PulleySpec):
-    """Construit une poulie 3D STEP"""
-    part = build_pulley(
-        diameter_mm=spec.diameter_mm,
-        rope_mm=spec.rope_diameter_mm,
-        width_mm=spec.width_mm or (2.0 * spec.rope_diameter_mm),
-    )
-    step_bytes = export_step_bytes(part)
-    return Response(
-        content=step_bytes,
-        media_type="model/step",
-        headers={"Content-Disposition": "attachment; filename=pulley.step"},
-    )
+    """Construit une poulie 3D et renvoie le fichier STEP"""
+    try:
+        part = build_pulley(
+            diameter_mm=spec.diameter_mm,
+            rope_mm=spec.rope_diameter_mm,
+            width_mm=spec.width_mm or (2.0 * spec.rope_diameter_mm),
+        )
+        step_bytes = export_step_bytes(part)
+        return Response(
+            content=step_bytes,
+            media_type="model/step",
+            headers={"Content-Disposition": "attachment; filename=pulley.step"},
+        )
+    except Exception as e:
+        return {"error": str(e)}
 
 # ==========================================================
-# 4️⃣ Génération de la poulie STL
+# 4️⃣ Génération de la poulie 3D au format STL
 # ==========================================================
 @app.post("/cad/pulley/stl")
 def cad_build_pulley_stl(spec: PulleySpec):
-    """Construit une poulie 3D STL"""
-    part = build_pulley(
-        diameter_mm=spec.diameter_mm,
-        rope_mm=spec.rope_diameter_mm,
-        width_mm=spec.width_mm or (2.0 * spec.rope_diameter_mm),
-    )
-    stl_bytes = export_stl_bytes(part)
-    return Response(
-        content=stl_bytes,
-        media_type="model/stl",
-        headers={"Content-Disposition": "attachment; filename=pulley.stl"},
-    )
+    """Construit une poulie 3D et renvoie le fichier STL"""
+    try:
+        part = build_pulley(
+            diameter_mm=spec.diameter_mm,
+            rope_mm=spec.rope_diameter_mm,
+            width_mm=spec.width_mm or (2.0 * spec.rope_diameter_mm),
+        )
+        stl_bytes = export_stl_bytes(part)
+        return Response(
+            content=stl_bytes,
+            media_type="model/stl",
+            headers={"Content-Disposition": "attachment; filename=pulley.stl"},
+        )
+    except Exception as e:
+        return {"error": str(e)}
